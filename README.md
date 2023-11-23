@@ -1,6 +1,6 @@
-# Python scripts for MediaWiki, extracted from ChatGPT
+# Python scripts for MediaWiki
 
-Use at your own risk.
+The scripts were extracted from ChatGPT and have been found functional. Usage is at your own risk.
 
 Edit pcmread.ini to suit, then do ```python pcmread.py``` to dump a CSV file.
 
