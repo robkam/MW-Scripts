@@ -1,47 +1,54 @@
 import configparser
+from urllib.parse import urlparse
 
 import mwclient
 
 
-def get_credentials():
-    # Read credentials from a configuration file
+def read_config(config_file="pcmread.ini"):
+    # Read configuration from a configuration file
     config = configparser.ConfigParser()
-    config.read("pcmread.ini")
-
-    username = config.get("Credentials", "username")
-    password = config.get("Credentials", "password")
-
-    return username, password
+    config.read(config_file)
+    return config
 
 
-def get_site_info():
-    # Read site information from a configuration file
-    config = configparser.ConfigParser()
-    config.read("pcmread.ini")
-
-    url = config.get("Site", "url")
-    path = config.get("Site", "path")
-    scheme = config.get("Site", "scheme")
-
-    return mwclient.Site(url, path=path, scheme=scheme)
-
-
-def login(site):
-    # Get credentials
-    username, password = get_credentials()
-
+def login(site, username, password):
+    # Login to the wiki
     print(f"Logging in with username: {username}")
     site.login(username, password)
 
 
+def get_subdomain(url):
+    # Extract subdomain from the URL
+    parsed_url = urlparse(url)
+
+    if parsed_url.hostname:
+        subdomain = parsed_url.hostname.split(".")[0]
+        return subdomain
+    elif parsed_url.path:
+        # If there's no scheme, but there is a path, try to extract subdomain from the path
+        subdomain = parsed_url.path.split(".")[0]
+        return subdomain
+    else:
+        print(
+            f"Error: Unable to extract subdomain from the URL. Parsed URL: {parsed_url}"
+        )
+        return None
+
+
 def get_all_pages_in_namespace(site, namespace):
+    # Skip namespaces -1 and -2
+    SKIP_NAMESPACES = [-1, -2]
+
+    if int(namespace) in SKIP_NAMESPACES:
+        return []
+
     all_pages = []
     params = {
         "generator": "allpages",
-        "gapnamespace": namespace,
+        "gapnamespace": int(namespace),
         "prop": "info",
         "inprop": "contentmodel",
-        "gaplimit": 500,
+        "gaplimit": 50000,
     }
 
     while True:
@@ -49,7 +56,7 @@ def get_all_pages_in_namespace(site, namespace):
             result = site.api("query", **params)
             query = result["query"]
             pages = query.get("pages", {})
-        except KeyError:
+        except KeyError as e:
             print(f"Unexpected response structure: {result}")
             break
 
@@ -72,22 +79,36 @@ def get_all_pages_in_namespace(site, namespace):
 
 def main():
     # Set your wiki site with the correct order of parameters
-    site = get_site_info()
+    config = read_config()
+    site_url = config.get("Site", "url")
+    site = mwclient.Site(
+        site_url, path=config.get("Site", "path"), scheme=config.get("Site", "scheme")
+    )
+
+    # Get credentials
+    username, password = config.get("Credentials", "username"), config.get(
+        "Credentials", "password"
+    )
 
     # Login to the wiki
-    login(site)
+    login(site, username, password)
 
-    # Set the namespaces to query, including 0 to 15 and the additional values
-    namespaces = list(range(16)) + [100, 101, 118, 119, 710, 711, 828, 829]
+    # Get all namespaces from the site
+    all_namespaces = site.api("query", meta="siteinfo", siprop="namespaces")["query"][
+        "namespaces"
+    ]
+
+    # Extract subdomain from the site URL
+    subdomain = get_subdomain(site_url)
 
     # Collect all pages in all namespaces
     all_pages = []
-    for namespace in namespaces:
+    for namespace, namespace_info in all_namespaces.items():
+        print(f"Fetching pages for namespace {namespace}...")
         try:
             # Fetch all pages in the specified namespace
             pages_in_namespace = get_all_pages_in_namespace(site, namespace)
             all_pages.extend(pages_in_namespace)
-
         except mwclient.errors.APIError as e:
             print(f"Error in namespace {namespace}: {e}")
 
@@ -95,8 +116,8 @@ def main():
     for title, content_model in all_pages:
         print(f'"{title}","{content_model}"')
 
-    # Write the results to a single file
-    file_name = "pages_content_model.csv"
+    # Write the results to a single file with the subdomain in the filename
+    file_name = f"{subdomain}.csv"
     with open(file_name, "w", encoding="utf-8") as file:
         for title, content_model in all_pages:
             file.write(f'"{title}","{content_model}"\n')

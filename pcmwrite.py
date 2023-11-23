@@ -1,65 +1,80 @@
+import argparse
 import configparser
 import csv
+import logging
 import os
 
 import mwclient
 
+CONFIG_FILE = "pcmwrite.ini"  # Change this to your desired configuration file
 
-def get_site_info():
+
+def read_config(config_file=CONFIG_FILE):
+    # Read configuration from a configuration file
     config = configparser.ConfigParser()
-    config.read("pcmwrite.ini")
+    config.read(config_file)
+    return config
 
-    url = config.get("Site", "url")
-    path = config.get("Site", "path")
-    scheme = config.get("Site", "scheme")
 
-    username = config.get("Credentials", "username")
-    password = config.get("Credentials", "password")
+def get_site_info(config_file=CONFIG_FILE):
+    config = read_config(config_file)
 
-    csv_file_path = config.get("Files", "csv_file_path")
+    # Explicitly specify the section names and provide default values
+    url = config.get("Site", "url", fallback="")
+    path = config.get("Site", "path", fallback="")
+    scheme = config.get("Site", "scheme", fallback="")
+
+    username = config.get("Credentials", "username", fallback="")
+    password = config.get("Credentials", "password", fallback="")
+
+    csv_file_path = config.get("Files", "csv_file_path", fallback="")
 
     return username, password, url, path, scheme, csv_file_path
 
 
 def login(site, username, password):
-    print(f"Logging in with username: {username}")
+    logging.info(f"Logging in with username: {username}")
     site.login(username, password)
 
 
 def edit_content_model(
     site, page_title, current_content_model, new_content_model, csv_log_writer
 ):
-    # Get the edit token for the user
-    token = site.get_token("edit")
+    try:
+        # Get the edit token for the user
+        token = site.get_token("edit")
 
-    # Use mwclient to get the current content of the page
-    page = site.pages[page_title]
+        # Use mwclient to get the current content of the page
+        page = site.pages[page_title]
 
-    # Get the current content
-    current_content = page.text()
+        # Get the current content
+        current_content = page.text() or ""
 
-    # Ensure current_content is not None
-    if current_content is None:
-        current_content = ""
-
-    # Use mwclient to make the API call
-    result = site.post(
-        "edit",
-        title=page_title,
-        token=token,
-        format="json",
-        contentmodel=new_content_model,
-        text=current_content,
-    )
-
-    # Check for successful edit
-    if "error" in result:
-        print(f"Failed to edit page {page_title}: {result['error']['info']}")
-    else:
-        print(
-            f"Page {page_title} content model changed from {current_content_model} to: {new_content_model}"
+        # Use mwclient to make the API call
+        result = site.post(
+            "edit",
+            title=page_title,
+            token=token,
+            format="json",
+            contentmodel=new_content_model,
+            text=current_content,
         )
-        csv_log_writer.writerow([page_title, current_content_model, new_content_model])
+
+        # Check for successful edit
+        if "error" in result:
+            logging.error(
+                f"Failed to edit page {page_title}: {result['error']['info']}"
+            )
+        else:
+            logging.info(
+                f"Page {page_title} content model changed from {current_content_model} to: {new_content_model}"
+            )
+            csv_log_writer.writerow(
+                [page_title, current_content_model, new_content_model]
+            )
+
+    except mwclient.errors.APIError as api_error:
+        logging.error(f"MWClient API error: {api_error}")
 
 
 def edit_pages_via_csv(site, csv_file_path):
@@ -70,37 +85,32 @@ def edit_pages_via_csv(site, csv_file_path):
     with open(log_file_path, "w", newline="") as log_file:
         csv_log_writer = csv.writer(log_file)
 
-        # Read and process the CSV file
-        with open(csv_file_path, newline="") as csvfile:
+        # Get the edit token for the user
+        token = site.get_token("edit")
+
+        with open(csv_file_path, newline="", encoding="utf-8") as csvfile:
             csv_reader = csv.reader(csvfile)
 
-            # Get the edit token for the user
-            token = site.get_token("edit")
-
             for row in csv_reader:
-                if len(row) == 2:  # Ensure each row has two columns
-                    page_title, new_content_model = row
-
-                    # Use mwclient to get the current content of the page
+                if len(row) >= 2:  # Ensure each row has at least two columns
+                    new_content_model = row[-1].strip()
+                    page_title = ",".join(row[:-1]).strip()
                     page = site.pages[page_title]
 
-                    # Check if the page exists
                     if not page.exists:
-                        print(f"Page {page_title} does not exist. Skipping.")
+                        logging.warning(f"Page {page_title} does not exist. Skipping.")
                         continue
 
-                    # Get the current content model by making a separate API request
                     page_info = page._info
                     current_content_model = page_info.get("contentmodel", "unknown")
 
-                    # Print the current content model for debugging
-                    print(
+                    logging.debug(
                         f"Page: {page_title}, Current Content Model: {current_content_model}"
                     )
 
                     # Compare the content models
                     if current_content_model == new_content_model:
-                        print(
+                        logging.info(
                             f"Page {page_title} content model is already: {new_content_model}. Skipping."
                         )
                         continue
@@ -115,16 +125,31 @@ def edit_pages_via_csv(site, csv_file_path):
                     )
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Your script description.")
+    parser.add_argument(
+        "--log-level", default="INFO", help="Logging level (default: INFO)"
+    )
+    return parser.parse_args()
+
+
 def main():
-    username, password, wiki_url, path, scheme, csv_file_path = get_site_info()
+    args = parse_args()
+    logging.basicConfig(level=args.log_level)
+
+    username, password, wiki_url, path, scheme, csv_file_path = get_site_info(
+        config_file=CONFIG_FILE
+    )
     site = mwclient.Site(wiki_url, path=path, scheme=scheme)
 
     try:
         login(site, username, password)
         edit_pages_via_csv(site, csv_file_path)
 
+    except mwclient.errors.LoginError as login_error:
+        logging.error(f"Login failed: {login_error}")
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logging.exception(f"An unexpected error occurred: {e}")
 
 
 if __name__ == "__main__":

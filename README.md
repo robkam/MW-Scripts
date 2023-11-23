@@ -1,17 +1,19 @@
-# Scripts requested from ChatGPT
+# Python scripts for MediaWiki, extracted from ChatGPT
 
 Use at your own risk.
 
-Edit pcmread.ini then do ```python pcmread.py``` to dump a CSV file.
+Edit pcmread.ini to suit, then do ```python pcmread.py``` to dump a CSV file.
 
-Edit and correct the dumped CSV file:<!-- This is AFAIK -->
+Edit and correct the dumped CSV file. The correct page content models should be apparent. However, it can vary depending on the version of MediaWiki and the installed extensions. Special:AllPages has a dropdown menu for the namespaces.
 
-* Common.css and Print.css = css
-* All .css = sanitized-css
-* All .js and .json = javascript
-* All talk pages and every other page = wikitext
+* Almost every page and all talk pages = wikitext
+* Common.css and Print.css pages = css
+* Other .css pages = sanitized-css
+* .js pages = javascript
+* .json pages = json
+* Module pages = scribunto
 
-Edit pcmwrite.ini then do ```python pcmwrite.py``` to read the CSV file. It will alter any mismatched page content models and write a log file of those changes.
+Edit pcmwrite.ini to suit, then do ```python pcmwrite.py``` to read the CSV file. It will alter any mismatched page content models and write a log file of those changes.
 
 ## pcmread.py
 
