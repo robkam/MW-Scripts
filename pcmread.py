@@ -77,8 +77,8 @@ def main():
     # Login to the wiki
     login(site)
 
-    # Set the namespaces to query
-    namespaces = list(range(16))
+    # Set the namespaces to query, including 0 to 15 and the additional values
+    namespaces = list(range(16)) + [100, 101, 118, 119, 710, 711, 828, 829]
 
     # Collect all pages in all namespaces
     all_pages = []
