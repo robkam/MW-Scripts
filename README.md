@@ -6,7 +6,7 @@ The scripts were extracted from ChatGPT and have been found to be functional. Us
 
 Edit pcmread.ini to suit, then do ```python pcmread.py``` to dump a CSV file.
 
-Edit and correct the dumped CSV file. The correct page content models should be apparent. However, it can vary depending on the version of MediaWiki and the installed extensions.
+Edit and correct the dumped CSV file. The correct page content models should be apparent.
 
 * Almost every page and all talk pages = wikitext
 * Common.css and Print.css pages = css
@@ -14,7 +14,7 @@ Edit and correct the dumped CSV file. The correct page content models should be 
 * .js pages = javascript
 * Module pages = scribunto
 
-Edit pcmwrite.ini to suit, then do ```python pcmwrite.py``` to read the CSV file. It will alter any mismatched page content models and write a log file of those changes.
+Edit pcmwrite.ini to suit, then do ```python pcmwrite.py```. It will read the CSV file and alter any mismatched page content models, and write a log file of those changes.
 
 ### pcmread.py
 
